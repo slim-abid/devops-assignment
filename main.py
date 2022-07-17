@@ -1,22 +1,34 @@
 #!/usr/bin/env python
-from OpenSSL import crypto, SSL
+
 import subprocess, os, sys
 import sys
 import subprocess
 import webbrowser
 
+from OpenSSL import crypto, SSL
 from os         import mkdir, listdir, rename, remove
 from loguru     import logger
 from pathlib    import Path
 from subprocess import Popen, PIPE, STDOUT
 
+# files paths
 scriptDirectory = Path().absolute()
 certfifcatePaths = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx"
 localDeploymentDirectory = Path().absolute() / "iotconnector-docs" / "deploy" / "local_deployment"
 azureDeploymentDirectory = Path().absolute() / "iotconnector-docs" / "deploy" / "azure_deployment"
 LocalDockerComposePath =  Path().absolute() / "iotconnector-docs" / "deploy" / "local_deployment" / "docker-compose.yml"
 AzureDockerComposePath =  Path().absolute() / "iotconnector-docs" / "deploy" / "azure_deployment" / "docker-compose.yml"
+
+#API default url
 url = 'https://127.0.0.1:443/'
+
+#IoTC environment vars
+IOT_AUTH_CALLBACK =  "127.0.0.1:8080"
+IOT_LICENSE_KEY = "" #"IUBXY-NSFKR-QZPCI-HVMOQ"
+BASIC_AUTH_USERNAME = "" #"user1"
+BASIC_AUTH_PASSWORD = "" #"5a4sdFadsa"
+IOT_GATEWAY_USERNAME = "" #"user1"
+IOT_GATEWAY_PASSWORD = "" #"gkj35zkjasb5"
 
 def set_docker_compose_vars(dockerComposePath, parameter, value):
     logger.info("Setting {} to {}".format(parameter, value))
@@ -87,12 +99,6 @@ def cert_gen(
         f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("utf-8"))
 
 
-# Create 'usage' portion
-# Something, blah blah, use script like this, blah blah.
-
-# Variable
-TYPE_RSA = crypto.TYPE_RSA
-
 # Generate pkey
 def generateKey(type, bits):
 
@@ -125,63 +131,80 @@ def generateCSR(nodename):
     f.write((crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)).decode("utf-8"))
     f.close()
 
-
-logger.info("cloning the bitbucket repo containing IoTC")
-with open("log.txt", "a") as output:
-    if sys.platform == "linux" or sys.platform == "linux2":
-        p = subprocess.run("docker run --rm -v ${HOME}:/root -v $(pwd):/git alpine/git clone https://bitbucket.org/enocean-cloud/iotconnector-docs.git", check= True, shell=True)
-       
-    else:
-        p = Popen(["docker","run","--rm","-v","{}:/root".format(scriptDirectory),"-v","{}:/git".format(scriptDirectory),"alpine/git","clone","https://bitbucket.org/enocean-cloud/iotconnector-docs.git"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
-        p.wait()
-#Call key & CSR functions
-logger.info("Generate private key for CA authority")
-key = generateKey(TYPE_RSA,2048)
-
-
-# generate csr request for connector
-logger.info("Creating certificate reauquest for connector")
-generateCSR('Connector_csr')
+if __name__ == "__main__":
+    logger.info("Cloning the bitbucket repo containing IoTC")
+    with open("log.txt", "a") as output:
+        if sys.platform == "linux" or sys.platform == "linux2":
+            p = subprocess.run("docker run --rm -v ${HOME}:/root -v $(pwd):/git alpine/git clone https://bitbucket.org/enocean-cloud/iotconnector-docs.git", check= True, shell=True)
+        
+        else:
+            p = Popen(["docker","run","--rm","-v","{}:/root".format(scriptDirectory),"-v","{}:/git".format(scriptDirectory),"alpine/git","clone","https://bitbucket.org/enocean-cloud/iotconnector-docs.git"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
+            p.wait()
+    #Call key & CSR functions
+    logger.info("Generate private key for CA authority")
+    key = generateKey(crypto.TYPE_RSA,2048)
 
 
-# generate certficate for CA
-logger.info("Creating root certificate")
-cert_gen()
-
-logger.info("Creating extfile for certificate generation")
-extfilePath = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "localhost.ext"
-extfile_lines = ['authorityKeyIdentifier=keyid,issuer', 'basicConstraints=CA:FALSE', 'subjectAltName = @alt_names', 'subjectKeyIdentifier = hash', '', '[alt_names]', 'DNS.1 = localhost']
-with open(extfilePath, 'w') as f:
-    f.writelines('\n'.join(extfile_lines))
+    # generate csr request for connector
+    logger.info("Creating certificate reauquest for connector")
+    generateCSR('Connector_csr')
 
 
-logger.info("Starting CA generation")
-with open("log.txt", "a") as output:
-    if sys.platform == "linux" or sys.platform == "linux2":
-        p = subprocess.run("docker run --rm -v {}:/export frapsoft/openssl x509 -req -in /export/dev.localhost.csr -CA /export/myCA.pem -CAkey /export/myCA.key -CAcreateserial -out /export/dev.localhost.crt -days 825 -sha256 -extfile /export/localhost.ext".format(certfifcatePaths), check= True, shell=True)
-       
-    else :
-        p = Popen(["docker","run","--rm","-v","{}:/export".format(certfifcatePaths),"frapsoft/openssl","x509","-req","-in","/export/dev.localhost.csr","-CA","/export/myCA.pem","-CAkey","/export/myCA.key","-CAcreateserial","-out","/export/dev.localhost.crt","-days","825","-sha256","-extfile","/export/localhost.ext"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
-        p.wait(500)
+    # generate certficate for CA
+    logger.info("Creating root certificate")
+    cert_gen()
+
+    logger.info("Creating extfile for certificate generation")
+    extfilePath = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "localhost.ext"
+    extfile_lines = ['authorityKeyIdentifier=keyid,issuer', 'basicConstraints=CA:FALSE', 'subjectAltName = @alt_names', 'subjectKeyIdentifier = hash', '', '[alt_names]', 'DNS.1 = localhost']
+    with open(extfilePath, 'w') as f:
+        f.writelines('\n'.join(extfile_lines))
 
 
-logger.info("Setting docker compose environment variables ...")
-
-set_docker_compose_vars(LocalDockerComposePath,"IOT_AUTH_CALLBACK","127.0.0.1:8080")
-set_docker_compose_vars(LocalDockerComposePath,"IOT_LICENSE_KEY","IUBXY-NSFKR-QZPCI-HVMOQ")
-set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_USERNAME","user1") # api credentials
-set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_PASSWORD","5a4sdFadsa") # api credentials
-set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_USERNAME","user1")
-set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_PASSWORD","gkj35zkjasb5")
-
-logger.info("Running docker compose ...")
-with open("log.txt", "a") as output:
-    if sys.platform == "linux" or sys.platform == "linux2":
-        p = subprocess.run("docker-compose up -d",cwd=localDeploymentDirectory, shell=True, check=True)
-       
-    else:
-        p = subprocess.run(["docker-compose","up","-d"],cwd=localDeploymentDirectory, shell=True, check=True)
-    
+    logger.info("Starting CA generation")
+    with open("log.txt", "a") as output:
+        if sys.platform == "linux" or sys.platform == "linux2":
+            p = subprocess.run("docker run --rm -v {}:/export frapsoft/openssl x509 -req -in /export/dev.localhost.csr -CA /export/myCA.pem -CAkey /export/myCA.key -CAcreateserial -out /export/dev.localhost.crt -days 825 -sha256 -extfile /export/localhost.ext".format(certfifcatePaths), check= True, shell=True)
+        
+        else :
+            p = Popen(["docker","run","--rm","-v","{}:/export".format(certfifcatePaths),"frapsoft/openssl","x509","-req","-in","/export/dev.localhost.csr","-CA","/export/myCA.pem","-CAkey","/export/myCA.key","-CAcreateserial","-out","/export/dev.localhost.crt","-days","825","-sha256","-extfile","/export/localhost.ext"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
+            p.wait(500)
 
 
-webbrowser.open(url)
+    logger.info("Setting docker compose environment variables ...")
+    string = input("Please enter URL (Default:127.0.0.1:443 ): ")
+    if (string):
+        IOT_AUTH_CALLBACK = string
+    set_docker_compose_vars(LocalDockerComposePath,"IOT_AUTH_CALLBACK",IOT_AUTH_CALLBACK)
+
+    while (not IOT_LICENSE_KEY):
+        IOT_LICENSE_KEY = input("Please enter connector license key: ")
+    set_docker_compose_vars(LocalDockerComposePath,"IOT_LICENSE_KEY",IOT_LICENSE_KEY)
+
+
+    while (not BASIC_AUTH_USERNAME):
+        BASIC_AUTH_USERNAME = input("Please enter basic auth username: ")
+    set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_USERNAME",BASIC_AUTH_USERNAME) # api credentials
+
+    while (not BASIC_AUTH_PASSWORD):
+        BASIC_AUTH_PASSWORD = input("Please enter basic auth password: ")
+    set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_PASSWORD",BASIC_AUTH_PASSWORD) # api credentials
+
+    while (not IOT_GATEWAY_USERNAME):
+        IOT_GATEWAY_USERNAME = input("Please enter IoT Gateway username: ")
+    set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_USERNAME",IOT_GATEWAY_USERNAME)
+
+    while (not IOT_GATEWAY_PASSWORD):
+        IOT_GATEWAY_PASSWORD = input("Please enter IoT Gateway password: ")
+    set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_PASSWORD",IOT_GATEWAY_PASSWORD)
+
+    logger.info("Running docker compose in detached mode...")
+    with open("log.txt", "a") as output:
+        if sys.platform == "linux" or sys.platform == "linux2":
+            p = subprocess.run("docker-compose up -d",cwd=localDeploymentDirectory, shell=True, check=True)
+        
+        else:
+            p = subprocess.run(["docker-compose","up","-d"],cwd=localDeploymentDirectory, shell=True, check=True)
+        
+
+    webbrowser.open(url)
