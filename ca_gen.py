@@ -10,12 +10,12 @@ from loguru     import logger
 from pathlib    import Path
 from subprocess import Popen, PIPE, STDOUT
 
-scriptDirectory = Path(__file__).parent
-certfifcatePaths = Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx"
-localDeploymentDirectory = Path(__file__).parent / "iotconnector-docs" / "deploy" / "local_deployment"
-azureDeploymentDirectory = Path(__file__).parent / "iotconnector-docs" / "deploy" / "azure_deployment"
-LocalDockerComposePath =  Path(__file__).parent / "iotconnector-docs" / "deploy" / "local_deployment" / "docker-compose.yml"
-AzureDockerComposePath =  Path(__file__).parent / "iotconnector-docs" / "deploy" / "azure_deployment" / "docker-compose.yml"
+scriptDirectory = Path().absolute()
+certfifcatePaths = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx"
+localDeploymentDirectory = Path().absolute() / "iotconnector-docs" / "deploy" / "local_deployment"
+azureDeploymentDirectory = Path().absolute() / "iotconnector-docs" / "deploy" / "azure_deployment"
+LocalDockerComposePath =  Path().absolute() / "iotconnector-docs" / "deploy" / "local_deployment" / "docker-compose.yml"
+AzureDockerComposePath =  Path().absolute() / "iotconnector-docs" / "deploy" / "azure_deployment" / "docker-compose.yml"
 url = 'https://127.0.0.1:443/'
 
 def set_docker_compose_vars(dockerComposePath, parameter, value):
@@ -59,8 +59,8 @@ def cert_gen(
     serialNumber=0,
     validityStartInSeconds=0,
     validityEndInSeconds=1825*24*60*60, #1825 days
-    KEY_FILE = Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx" / "myCA.key",
-    CERT_FILE= Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx" / "myCA.pem"):
+    KEY_FILE = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "myCA.key",
+    CERT_FILE= Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "myCA.pem"):
     #can look at generated file using openssl:
     #openssl x509 -inform pem -in selfsigned.crt -noout -text
     # create a key pair
@@ -96,7 +96,7 @@ TYPE_RSA = crypto.TYPE_RSA
 # Generate pkey
 def generateKey(type, bits):
 
-    keyfile = Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx" / "dev.localhost.key"
+    keyfile = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "dev.localhost.key"
     key = crypto.PKey()
     key.generate_key(type, bits)
     f = open(keyfile, "w")
@@ -107,7 +107,7 @@ def generateKey(type, bits):
 # Generate CSR
 def generateCSR(nodename):
 
-    csrfile = Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx" / "dev.localhost.csr"
+    csrfile = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "dev.localhost.csr"
     req = crypto.X509Req()
     # Return an X509Name object representing the subject of the certificate.
     req.get_subject().CN = nodename
@@ -128,9 +128,12 @@ def generateCSR(nodename):
 
 logger.info("cloning the bitbucket repo containing IoTC")
 with open("log.txt", "a") as output:
-    p = Popen(["docker","run","--rm","-v","{}:/root".format(scriptDirectory),"-v","{}:/git".format(scriptDirectory),"alpine/git","clone","https://bitbucket.org/enocean-cloud/iotconnector-docs.git"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
-    p.wait()
-
+    if sys.platform == "linux" or sys.platform == "linux2":
+        p = subprocess.run("docker run --rm -v ${HOME}:/root -v $(pwd):/git alpine/git clone https://bitbucket.org/enocean-cloud/iotconnector-docs.git", check= True, shell=True)
+       
+    else:
+        p = Popen(["docker","run","--rm","-v","{}:/root".format(scriptDirectory),"-v","{}:/git".format(scriptDirectory),"alpine/git","clone","https://bitbucket.org/enocean-cloud/iotconnector-docs.git"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
+        p.wait()
 #Call key & CSR functions
 logger.info("Generate private key for CA authority")
 key = generateKey(TYPE_RSA,2048)
@@ -146,7 +149,7 @@ logger.info("Creating root certificate")
 cert_gen()
 
 logger.info("Creating extfile for certificate generation")
-extfilePath = Path(__file__).parent / "iotconnector-docs" / "deploy" / "nginx" / "localhost.ext"
+extfilePath = Path().absolute() / "iotconnector-docs" / "deploy" / "nginx" / "localhost.ext"
 extfile_lines = ['authorityKeyIdentifier=keyid,issuer', 'basicConstraints=CA:FALSE', 'subjectAltName = @alt_names', 'subjectKeyIdentifier = hash', '', '[alt_names]', 'DNS.1 = localhost']
 with open(extfilePath, 'w') as f:
     f.writelines('\n'.join(extfile_lines))
@@ -154,23 +157,30 @@ with open(extfilePath, 'w') as f:
 
 logger.info("Starting CA generation")
 with open("log.txt", "a") as output:
-    p = Popen(["docker","run","--rm","-v","{}:/export".format(certfifcatePaths),"frapsoft/openssl","x509","-req","-in","/export/dev.localhost.csr","-CA","/export/myCA.pem","-CAkey","/export/myCA.key","-CAcreateserial","-out","/export/dev.localhost.crt","-days","825","-sha256","-extfile","/export/localhost.ext"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
-    p.wait(500)
-#     stdout_data = p.communicate(input='data_to_write'.encode())[0]
-# #stdout_data = p.communicate(input='data_to_write'.encode())[0]
+    if sys.platform == "linux" or sys.platform == "linux2":
+        p = subprocess.run("docker run --rm -v {}:/export frapsoft/openssl x509 -req -in /export/dev.localhost.csr -CA /export/myCA.pem -CAkey /export/myCA.key -CAcreateserial -out /export/dev.localhost.crt -days 825 -sha256 -extfile /export/localhost.ext".format(certfifcatePaths), check= True, shell=True)
+       
+    else :
+        p = Popen(["docker","run","--rm","-v","{}:/export".format(certfifcatePaths),"frapsoft/openssl","x509","-req","-in","/export/dev.localhost.csr","-CA","/export/myCA.pem","-CAkey","/export/myCA.key","-CAcreateserial","-out","/export/dev.localhost.crt","-days","825","-sha256","-extfile","/export/localhost.ext"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
+        p.wait(500)
+
 
 logger.info("Setting docker compose environment variables ...")
 
 set_docker_compose_vars(LocalDockerComposePath,"IOT_AUTH_CALLBACK","127.0.0.1:8080")
 set_docker_compose_vars(LocalDockerComposePath,"IOT_LICENSE_KEY","IUBXY-NSFKR-QZPCI-HVMOQ")
-set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_USERNAME","user1")
-set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_PASSWORD","5a4sdFadsa")
+set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_USERNAME","user1") # api credentials
+set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_PASSWORD","5a4sdFadsa") # api credentials
 set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_USERNAME","user1")
 set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_PASSWORD","gkj35zkjasb5")
 
 logger.info("Running docker compose ...")
 with open("log.txt", "a") as output:
-    p = subprocess.run(["docker-compose","up","-d"],cwd=localDeploymentDirectory, shell=True, check=True)
+    if sys.platform == "linux" or sys.platform == "linux2":
+        p = subprocess.run("docker-compose up -d",cwd=localDeploymentDirectory, shell=True, check=True)
+       
+    else:
+        p = subprocess.run(["docker-compose","up","-d"],cwd=localDeploymentDirectory, shell=True, check=True)
     
 
 
