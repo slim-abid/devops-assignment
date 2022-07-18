@@ -1,5 +1,5 @@
-# IoTC Local Deployment
-This repostory set as local deployment helper for EnOcean IoTC based on python and docker and it's tested on linux (ubuntu 20.04) and windows.
+# IoTC Deployment
+This repostory serve as local or azure deployment helper for EnOcean IoTC based on python and docker and it's tested on linux (ubuntu 20.04) and windows.
 
 ## Requirements:
     Docker
@@ -70,5 +70,3 @@ pip install -r requirements.txt
 sudo python main.py
 ```
 
-#### Development notes:
-- This code could be always extended to support azure development within the main.py file
