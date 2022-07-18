@@ -23,6 +23,7 @@ AzureDockerComposePath =  Path().absolute() / "iotconnector-docs" / "deploy" / "
 url = 'https://127.0.0.1:443/'
 
 #IoTC environment vars
+DeploymentType = "" # Could be even local or azure deployment 
 IOT_AUTH_CALLBACK =  "127.0.0.1:8080"
 IOT_LICENSE_KEY = "" #"IUBXY-NSFKR-QZPCI-HVMOQ"
 BASIC_AUTH_USERNAME = "" #"user1"
@@ -170,41 +171,52 @@ if __name__ == "__main__":
             p = Popen(["docker","run","--rm","-v","{}:/export".format(certfifcatePaths),"frapsoft/openssl","x509","-req","-in","/export/dev.localhost.csr","-CA","/export/myCA.pem","-CAkey","/export/myCA.key","-CAcreateserial","-out","/export/dev.localhost.crt","-days","825","-sha256","-extfile","/export/localhost.ext"], stdout=PIPE, stdin=PIPE, stderr=output, shell=True)
             p.wait(500)
 
+    while (not (DeploymentType=="local" or DeploymentType=="azure" )):
+        DeploymentType = input("Please enter deployment type (Could be \"local\" or \"azure\" ): ")
 
+    if(DeploymentType == "azure"):
+        deploymentDirectory = azureDeploymentDirectory
+        dockerComposePath = AzureDockerComposePath
+    else :
+        deploymentDirectory = localDeploymentDirectory
+        dockerComposePath = LocalDockerComposePath
     logger.info("Setting docker compose environment variables ...")
+    
+
+
     string = input("Please enter URL (Default:127.0.0.1:443 ): ")
     if (string):
         IOT_AUTH_CALLBACK = string
-    set_docker_compose_vars(LocalDockerComposePath,"IOT_AUTH_CALLBACK",IOT_AUTH_CALLBACK)
+    set_docker_compose_vars(dockerComposePath,"IOT_AUTH_CALLBACK",IOT_AUTH_CALLBACK)
 
     while (not IOT_LICENSE_KEY):
         IOT_LICENSE_KEY = input("Please enter connector license key: ")
-    set_docker_compose_vars(LocalDockerComposePath,"IOT_LICENSE_KEY",IOT_LICENSE_KEY)
+    set_docker_compose_vars(dockerComposePath,"IOT_LICENSE_KEY",IOT_LICENSE_KEY)
 
 
     while (not BASIC_AUTH_USERNAME):
         BASIC_AUTH_USERNAME = input("Please enter basic auth username: ")
-    set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_USERNAME",BASIC_AUTH_USERNAME) # api credentials
+    set_docker_compose_vars(dockerComposePath,"BASIC_AUTH_USERNAME",BASIC_AUTH_USERNAME) # api credentials
 
     while (not BASIC_AUTH_PASSWORD):
         BASIC_AUTH_PASSWORD = input("Please enter basic auth password: ")
-    set_docker_compose_vars(LocalDockerComposePath,"BASIC_AUTH_PASSWORD",BASIC_AUTH_PASSWORD) # api credentials
+    set_docker_compose_vars(dockerComposePath,"BASIC_AUTH_PASSWORD",BASIC_AUTH_PASSWORD) # api credentials
 
     while (not IOT_GATEWAY_USERNAME):
         IOT_GATEWAY_USERNAME = input("Please enter IoT Gateway username: ")
-    set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_USERNAME",IOT_GATEWAY_USERNAME)
+    set_docker_compose_vars(dockerComposePath,"IOT_GATEWAY_USERNAME",IOT_GATEWAY_USERNAME)
 
     while (not IOT_GATEWAY_PASSWORD):
         IOT_GATEWAY_PASSWORD = input("Please enter IoT Gateway password: ")
-    set_docker_compose_vars(LocalDockerComposePath,"IOT_GATEWAY_PASSWORD",IOT_GATEWAY_PASSWORD)
+    set_docker_compose_vars(dockerComposePath,"IOT_GATEWAY_PASSWORD",IOT_GATEWAY_PASSWORD)
 
     logger.info("Running docker compose in detached mode...")
     with open("log.txt", "a") as output:
         if sys.platform == "linux" or sys.platform == "linux2":
-            p = subprocess.run("docker-compose up -d",cwd=localDeploymentDirectory, shell=True, check=True)
+            p = subprocess.run("docker-compose up -d",cwd=deploymentDirectory, shell=True, check=True)
         
         else:
-            p = subprocess.run(["docker-compose","up","-d"],cwd=localDeploymentDirectory, shell=True, check=True)
+            p = subprocess.run(["docker-compose","up","-d"],cwd=deploymentDirectory, shell=True, check=True)
         
 
     webbrowser.open(url)
