@@ -31,7 +31,7 @@ you should get an output similar to `pip x.x.x from C:/xxxxx/xxx/xxx (python 3.x
 - Make sure you have python pip installed on your linux machine writing the following command into the terminal:
 `pip --version` expect the same output as in windows.
 
-## Step By Step Local Deployment:
+## Deployment Guide:
 #### Windows:
 
 
